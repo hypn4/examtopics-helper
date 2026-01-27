@@ -1,6 +1,6 @@
 [project]
 name = "examtopics-helper"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Extract and export ExamTopics exam questions to HTML, PDF, and Markdown"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,13 +24,20 @@ examtopics = "examtopics.cli:cli"
 package = true
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.18.0",
     "ruff>=0.14.14",
 ]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/examtopics/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/examtopics"]
