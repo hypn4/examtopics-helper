@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+from enum import Enum
 from typing import Any
 
 import httpx
@@ -18,14 +19,24 @@ from selectolax.parser import HTMLParser
 
 from examtopics.models import Choice, Exam, Question, VotedAnswer
 
+
+class LoadingMode(str, Enum):
+    """Question loading modes."""
+
+    PAGINATED = "paginated"  # Default: 50 questions per page
+    BULK = "bulk"  # Load all via custom-view
+    RANGE = "range"  # Load in batches via range filter
+    AUTO = "auto"  # Try bulk -> range -> paginated
+
+
 console = Console()
 
 # Pattern to match embedded JSON vote data
 VOTE_JSON_PATTERN = re.compile(r'\[{"voted_answers".*?\}\]')
 # Pattern to match choice lines that got concatenated (e.g., "A.Some text...B.Other text")
-CHOICE_CONCAT_PATTERN = re.compile(r'[A-F]\.[A-Z][^.]*?(?=[A-F]\.|Reveal Solution|$)')
+CHOICE_CONCAT_PATTERN = re.compile(r"[A-F]\.[A-Z][^.]*?(?=[A-F]\.|Reveal Solution|$)")
 # Pattern to match UI elements that got concatenated
-UI_ELEMENTS_PATTERN = re.compile(r'Reveal Solution.*$', re.DOTALL)
+UI_ELEMENTS_PATTERN = re.compile(r"Reveal Solution.*$", re.DOTALL)
 
 
 class ExamTopicsScraper:
@@ -33,6 +44,7 @@ class ExamTopicsScraper:
 
     BASE_URL = "https://www.examtopics.com"
     QUESTIONS_PER_PAGE = 50
+    DEFAULT_BATCH_SIZE = 100
 
     def __init__(self, cookies: dict[str, str], delay: float = 1.0):
         """Initialize scraper with session cookies.
@@ -53,19 +65,28 @@ class ExamTopicsScraper:
         """Build URL for a specific exam page."""
         return f"{self.BASE_URL}/exams/{provider}/{exam_code}/view/{page}/"
 
+    def _build_custom_view_url(self, provider: str, exam_code: str) -> str:
+        """Build URL for custom-view page."""
+        return f"{self.BASE_URL}/exams/{provider}/{exam_code}/custom-view/"
+
+    def _extract_csrf_token(self, html: str) -> str | None:
+        """Extract CSRF token from page HTML."""
+        match = re.search(r'name="csrfmiddlewaretoken"\s+value="([^"]+)"', html)
+        return match.group(1) if match else None
+
     def _clean_question_text(self, text: str) -> str:
         """Clean question text by removing embedded vote JSON and concatenated choices."""
         # Remove embedded JSON vote data
-        text = VOTE_JSON_PATTERN.sub('', text)
+        text = VOTE_JSON_PATTERN.sub("", text)
 
         # Remove UI elements like "Reveal SolutionHide SolutionDiscussion..."
-        text = UI_ELEMENTS_PATTERN.sub('', text)
+        text = UI_ELEMENTS_PATTERN.sub("", text)
 
         # Remove concatenated choice options (A.xxx B.xxx C.xxx D.xxx)
         # Find where choices start - typically "A." followed by capital letter
-        choice_start = re.search(r'[A-F]\.[A-Z]', text)
+        choice_start = re.search(r"[A-F]\.[A-Z]", text)
         if choice_start:
-            text = text[:choice_start.start()]
+            text = text[: choice_start.start()]
 
         return text.strip()
 
@@ -83,7 +104,12 @@ class ExamTopicsScraper:
             else:
                 # Alternative format
                 full_text = elem.text(strip=True)
-                if full_text and full_text[0].isalpha() and len(full_text) > 1 and full_text[1] == ".":
+                if (
+                    full_text
+                    and full_text[0].isalpha()
+                    and len(full_text) > 1
+                    and full_text[1] == "."
+                ):
                     label = full_text[0]
                 else:
                     continue
@@ -101,11 +127,11 @@ class ExamTopicsScraper:
                 # Get full text and remove the label part
                 full_text = elem.text(strip=True)
                 if full_text.startswith(f"{label}."):
-                    text = full_text[len(label) + 1:].strip()
+                    text = full_text[len(label) + 1 :].strip()
                 else:
                     text = full_text
                 # Remove "Most Voted" badge text if present
-                text = re.sub(r'\s*Most Voted\s*$', '', text).strip()
+                text = re.sub(r"\s*Most Voted\s*$", "", text).strip()
 
             if label and text and label not in seen_labels:
                 seen_labels.add(label)
@@ -189,8 +215,9 @@ class ExamTopicsScraper:
         self, card: Any, base_number: int, index: int
     ) -> Question | None:
         """Parse a single question from a card element."""
-        # Get question number
-        number_elem = card.css_first(".question-number, .card-header .text-white")
+        # Get question number from card header
+        # Note: "text-white" is on the same element as "card-header", not a child
+        number_elem = card.css_first(".question-number, .card-header")
         if number_elem:
             text = number_elem.text(strip=True)
             match = re.search(r"Question\s*#?\s*(\d+)", text, re.IGNORECASE)
@@ -203,7 +230,7 @@ class ExamTopicsScraper:
 
         # Get topic number
         topic = None
-        topic_elem = card.css_first(".question-topic")
+        topic_elem = card.css_first(".question-title-topic, .question-topic")
         if topic_elem:
             text = topic_elem.text(strip=True)
             match = re.search(r"Topic\s*#?\s*(\d+)", text, re.IGNORECASE)
@@ -302,6 +329,81 @@ class ExamTopicsScraper:
 
         return ""
 
+    async def _fetch_custom_view_page(
+        self, client: httpx.AsyncClient, provider: str, exam_code: str
+    ) -> tuple[str, str | None]:
+        """Fetch custom-view page and extract CSRF token.
+
+        Returns:
+            Tuple of (html_content, csrf_token)
+        """
+        url = self._build_custom_view_url(provider, exam_code)
+        response = await client.get(url, headers=self.headers)
+        response.raise_for_status()
+        csrf_token = self._extract_csrf_token(response.text)
+        return response.text, csrf_token
+
+    async def _post_custom_view(
+        self,
+        client: httpx.AsyncClient,
+        provider: str,
+        exam_code: str,
+        csrf_token: str,
+        questions_per_page: int,
+        range_from: int | None = None,
+        range_to: int | None = None,
+    ) -> httpx.Response:
+        """POST to custom-view to load questions with specific settings.
+
+        Args:
+            client: HTTP client
+            provider: Exam provider
+            exam_code: Exam code
+            csrf_token: CSRF token from the page
+            questions_per_page: Number of questions to load per page
+            range_from: Start of question range (optional)
+            range_to: End of question range (optional)
+
+        Returns:
+            HTTP response
+        """
+        url = self._build_custom_view_url(provider, exam_code)
+        data = {
+            "csrfmiddlewaretoken": csrf_token,
+            "questions-per-page": str(questions_per_page),
+        }
+        if range_from is not None and range_to is not None:
+            data["question-range-on"] = "on"
+            data["from-input"] = str(range_from)
+            data["to-input"] = str(range_to)
+
+        headers = {
+            **self.headers,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": self.BASE_URL,
+            "Referer": url,
+        }
+
+        response = await client.post(
+            url, data=data, headers=headers, follow_redirects=True
+        )
+        return response
+
+    def _parse_custom_view(self, html: str) -> list[Question]:
+        """Parse all questions from custom-view HTML (no page numbering)."""
+        tree = HTMLParser(html)
+        questions = []
+
+        # Find all question cards
+        cards = tree.css(".exam-question-card, .question-card, .card.exam-question")
+
+        for i, card in enumerate(cards):
+            question = self._parse_question(card, 1, i)
+            if question:
+                questions.append(question)
+
+        return questions
+
     async def scrape_page(
         self, client: httpx.AsyncClient, provider: str, exam_code: str, page: int
     ) -> list[Question]:
@@ -313,17 +415,207 @@ class ExamTopicsScraper:
         response.raise_for_status()
         return self._parse_page(response.text, page)
 
-    async def scrape_exam(self, provider: str, exam_code: str) -> Exam:
+    async def _scrape_bulk(
+        self,
+        client: httpx.AsyncClient,
+        provider: str,
+        exam_code: str,
+        total_questions: int,
+    ) -> list[Question] | None:
+        """Try to load all questions in one bulk request via custom-view.
+
+        Returns:
+            List of questions if successful, None if bulk loading failed
+        """
+        console.print("[cyan]Attempting bulk loading via custom-view...[/cyan]")
+
+        try:
+            # Fetch custom-view page to get CSRF token
+            _, csrf_token = await self._fetch_custom_view_page(
+                client, provider, exam_code
+            )
+            if not csrf_token:
+                console.print(
+                    "[yellow]Could not extract CSRF token for bulk loading[/yellow]"
+                )
+                return None
+
+            # POST with all questions
+            response = await self._post_custom_view(
+                client, provider, exam_code, csrf_token, total_questions
+            )
+
+            if response.status_code != 200:
+                console.print(
+                    f"[yellow]Bulk loading returned status {response.status_code}[/yellow]"
+                )
+                return None
+
+            questions = self._parse_custom_view(response.text)
+
+            # Verify we got a reasonable number of questions
+            if len(questions) < total_questions * 0.9:  # Allow 10% tolerance
+                console.print(
+                    f"[yellow]Bulk loading returned only {len(questions)}/{total_questions} questions[/yellow]"
+                )
+                return None
+
+            console.print(
+                f"[green]Bulk loading successful: {len(questions)} questions[/green]"
+            )
+            return questions
+
+        except Exception as e:
+            console.print(f"[yellow]Bulk loading failed: {e}[/yellow]")
+            return None
+
+    async def _scrape_range(
+        self,
+        client: httpx.AsyncClient,
+        provider: str,
+        exam_code: str,
+        total_questions: int,
+        batch_size: int,
+    ) -> list[Question] | None:
+        """Load questions in batches using range filter via custom-view.
+
+        Returns:
+            List of questions if successful, None if range loading failed
+        """
+        console.print(
+            f"[cyan]Attempting range loading (batch size: {batch_size})...[/cyan]"
+        )
+        all_questions: list[Question] = []
+
+        try:
+            num_batches = (total_questions + batch_size - 1) // batch_size
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("[cyan]Loading batches...", total=num_batches)
+
+                for batch_idx in range(num_batches):
+                    range_from = batch_idx * batch_size + 1
+                    range_to = min((batch_idx + 1) * batch_size, total_questions)
+
+                    # Get fresh CSRF token for each batch
+                    _, csrf_token = await self._fetch_custom_view_page(
+                        client, provider, exam_code
+                    )
+                    if not csrf_token:
+                        console.print("[yellow]Could not extract CSRF token[/yellow]")
+                        return None
+
+                    await asyncio.sleep(self.delay)
+
+                    response = await self._post_custom_view(
+                        client,
+                        provider,
+                        exam_code,
+                        csrf_token,
+                        batch_size,
+                        range_from,
+                        range_to,
+                    )
+
+                    if response.status_code != 200:
+                        console.print(
+                            f"[yellow]Range batch {batch_idx + 1} returned status {response.status_code}[/yellow]"
+                        )
+                        return None
+
+                    questions = self._parse_custom_view(response.text)
+                    if not questions:
+                        console.print(
+                            f"[yellow]Range batch {batch_idx + 1} returned no questions[/yellow]"
+                        )
+                        return None
+
+                    all_questions.extend(questions)
+                    progress.update(task, advance=1)
+
+            console.print(
+                f"[green]Range loading successful: {len(all_questions)} questions[/green]"
+            )
+            return all_questions
+
+        except Exception as e:
+            console.print(f"[yellow]Range loading failed: {e}[/yellow]")
+            return None
+
+    async def _scrape_paginated(
+        self,
+        client: httpx.AsyncClient,
+        provider: str,
+        exam_code: str,
+        total_questions: int,
+        first_page_html: str,
+    ) -> list[Question]:
+        """Load questions using traditional pagination (50 per page)."""
+        console.print("[cyan]Using paginated loading (50 questions per page)...[/cyan]")
+
+        total_pages = (
+            total_questions + self.QUESTIONS_PER_PAGE - 1
+        ) // self.QUESTIONS_PER_PAGE
+
+        # Parse first page
+        all_questions = self._parse_page(first_page_html, 1)
+
+        # Fetch remaining pages with progress bar
+        if total_pages > 1:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    "[cyan]Scraping pages...", total=total_pages - 1
+                )
+
+                for page in range(2, total_pages + 1):
+                    await asyncio.sleep(self.delay)
+                    questions = await self.scrape_page(
+                        client, provider, exam_code, page
+                    )
+                    if not questions:
+                        break
+                    all_questions.extend(questions)
+                    progress.update(task, advance=1)
+
+        return all_questions
+
+    async def scrape_exam(
+        self,
+        provider: str,
+        exam_code: str,
+        mode: LoadingMode = LoadingMode.PAGINATED,
+        batch_size: int | None = None,
+    ) -> Exam:
         """Scrape an entire exam with all questions.
 
         Args:
             provider: Exam provider (e.g., "amazon", "microsoft")
             exam_code: Exam code slug (e.g., "aws-certified-devops-engineer-professional-dop-c02")
+            mode: Loading mode (paginated, bulk, range, auto)
+            batch_size: Batch size for range mode (default: 100)
 
         Returns:
             Exam object with all questions
         """
-        async with httpx.AsyncClient(cookies=self.cookies, timeout=30.0) as client:
+        if batch_size is None:
+            batch_size = self.DEFAULT_BATCH_SIZE
+
+        # Use longer timeout for bulk/range modes
+        timeout = 120.0 if mode in (LoadingMode.BULK, LoadingMode.AUTO) else 30.0
+
+        async with httpx.AsyncClient(cookies=self.cookies, timeout=timeout) as client:
             # Fetch first page to get metadata
             url = self._build_url(provider, exam_code, 1)
             console.print(f"[cyan]Fetching exam info from {url}...[/cyan]")
@@ -336,9 +628,8 @@ class ExamTopicsScraper:
             exam_title = self._get_exam_title(first_page_html)
 
             if total_questions == 0:
-                # Estimate from first page
                 first_questions = self._parse_page(first_page_html, 1)
-                total_questions = len(first_questions) * 10  # Rough estimate
+                total_questions = len(first_questions) * 10
                 console.print(
                     f"[yellow]Could not determine total questions, estimated: {total_questions}[/yellow]"
                 )
@@ -346,35 +637,87 @@ class ExamTopicsScraper:
             total_pages = (
                 total_questions + self.QUESTIONS_PER_PAGE - 1
             ) // self.QUESTIONS_PER_PAGE
-            console.print(
-                f"[green]Found {total_questions} questions across {total_pages} pages[/green]"
-            )
 
-            # Parse first page
-            all_questions = self._parse_page(first_page_html, 1)
+            # Display mode-appropriate message
+            if mode == LoadingMode.PAGINATED:
+                console.print(
+                    f"[green]Found {total_questions} questions ({total_pages} pages)[/green]"
+                )
+            elif mode == LoadingMode.BULK:
+                console.print(
+                    f"[green]Found {total_questions} questions (will load all at once)[/green]"
+                )
+            elif mode == LoadingMode.RANGE:
+                num_batches = (total_questions + batch_size - 1) // batch_size
+                console.print(
+                    f"[green]Found {total_questions} questions ({num_batches} batches of {batch_size})[/green]"
+                )
+            elif mode == LoadingMode.AUTO:
+                console.print(f"[green]Found {total_questions} questions[/green]")
 
-            # Fetch remaining pages with progress bar
-            if total_pages > 1:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    TaskProgressColumn(),
-                    console=console,
-                ) as progress:
-                    task = progress.add_task(
-                        "[cyan]Scraping pages...", total=total_pages - 1
+            console.print(f"[blue]Loading mode: {mode.value}[/blue]")
+
+            all_questions: list[Question] = []
+
+            if mode == LoadingMode.BULK:
+                result = await self._scrape_bulk(
+                    client, provider, exam_code, total_questions
+                )
+                if result:
+                    all_questions = result
+                else:
+                    console.print(
+                        "[yellow]Bulk loading failed, falling back to paginated[/yellow]"
+                    )
+                    all_questions = await self._scrape_paginated(
+                        client, provider, exam_code, total_questions, first_page_html
                     )
 
-                    for page in range(2, total_pages + 1):
-                        await asyncio.sleep(self.delay)  # Rate limiting
-                        questions = await self.scrape_page(
-                            client, provider, exam_code, page
+            elif mode == LoadingMode.RANGE:
+                result = await self._scrape_range(
+                    client, provider, exam_code, total_questions, batch_size
+                )
+                if result:
+                    all_questions = result
+                else:
+                    console.print(
+                        "[yellow]Range loading failed, falling back to paginated[/yellow]"
+                    )
+                    all_questions = await self._scrape_paginated(
+                        client, provider, exam_code, total_questions, first_page_html
+                    )
+
+            elif mode == LoadingMode.AUTO:
+                # Try bulk first
+                result = await self._scrape_bulk(
+                    client, provider, exam_code, total_questions
+                )
+                if result:
+                    all_questions = result
+                else:
+                    # Try range next
+                    result = await self._scrape_range(
+                        client, provider, exam_code, total_questions, batch_size
+                    )
+                    if result:
+                        all_questions = result
+                    else:
+                        # Fall back to paginated
+                        console.print(
+                            "[yellow]Falling back to paginated loading[/yellow]"
                         )
-                        if not questions:  # Page doesn't exist, stop loop
-                            break
-                        all_questions.extend(questions)
-                        progress.update(task, advance=1)
+                        all_questions = await self._scrape_paginated(
+                            client,
+                            provider,
+                            exam_code,
+                            total_questions,
+                            first_page_html,
+                        )
+
+            else:  # PAGINATED (default)
+                all_questions = await self._scrape_paginated(
+                    client, provider, exam_code, total_questions, first_page_html
+                )
 
             # Sort questions by number
             all_questions.sort(key=lambda q: q.number)
