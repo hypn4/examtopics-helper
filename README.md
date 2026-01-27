@@ -2,7 +2,41 @@
 
 Extract and export ExamTopics exam questions to HTML, PDF, and Markdown formats.
 
-## Installation
+## Quick Start (Pre-built Binary)
+
+Download a pre-built binary from [GitHub Releases](https://github.com/hypn4/examtopics-helper/releases) — no Python installation required.
+
+### Download
+
+| Platform | Binary |
+|----------|--------|
+| macOS | `examtopics-macos` |
+| Windows | `examtopics-windows.exe` |
+| Linux | `examtopics-linux` |
+
+### Run
+
+**macOS / Linux:**
+
+```bash
+# Make executable
+chmod +x examtopics-macos  # or examtopics-linux
+
+# Run
+./examtopics-macos extract --exam "amazon/dop-c02" --cookie "..."
+```
+
+**Windows:**
+
+```powershell
+.\examtopics-windows.exe extract --exam "amazon/dop-c02" --cookie "..."
+```
+
+> **Note:** All CLI options below work the same way — just replace `examtopics` with the binary name (e.g., `./examtopics-macos`).
+
+---
+
+## Installation (From Source)
 
 ```bash
 # Clone the repository
