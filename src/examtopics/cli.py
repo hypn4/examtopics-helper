@@ -18,7 +18,7 @@ from examtopics.exporters import (
     PDFExporter,
     PDF_AVAILABLE,
 )
-from examtopics.scraper import ExamTopicsScraper, parse_cookie_string
+from examtopics.scraper import ExamTopicsScraper, LoadingMode, parse_cookie_string
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -103,6 +103,24 @@ def extract(
             help="Delay between page requests in seconds (or set EXAMTOPICS_DELAY env var)",
         ),
     ] = 1.0,
+    mode: Annotated[
+        LoadingMode,
+        typer.Option(
+            "--mode",
+            "-m",
+            envvar="EXAMTOPICS_MODE",
+            help="Loading mode: paginated (default), bulk, range, or auto (or set EXAMTOPICS_MODE env var)",
+        ),
+    ] = LoadingMode.PAGINATED,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            "-b",
+            envvar="EXAMTOPICS_BATCH_SIZE",
+            help="Batch size for range mode (or set EXAMTOPICS_BATCH_SIZE env var)",
+        ),
+    ] = 100,
 ) -> None:
     """Extract exam questions from ExamTopics and export to various formats.
 
@@ -138,12 +156,20 @@ def extract(
         raise typer.Exit(1)
 
     # Show configuration
+    mode_info = f"{mode.value}"
+    if mode == LoadingMode.RANGE:
+        mode_info += f" (batch size: {batch_size})"
+    elif mode == LoadingMode.AUTO:
+        mode_info += " (will try bulk → range → paginated)"
+
     console.print(
         Panel(
             f"[bold]Provider:[/bold] {provider}\n"
             f"[bold]Exam Code:[/bold] {exam_code}\n"
             f"[bold]Output:[/bold] {output_dir.absolute()}\n"
-            f"[bold]Formats:[/bold] {', '.join(f.value for f in formats)}",
+            f"[bold]Formats:[/bold] {', '.join(f.value for f in formats)}\n"
+            f"[bold]Mode:[/bold] {mode_info}\n"
+            f"[bold]Delay:[/bold] {delay}s",
             title="ExamTopics Extractor",
             border_style="blue",
         )
@@ -153,7 +179,9 @@ def extract(
     scraper = ExamTopicsScraper(cookies=cookies, delay=delay)
 
     try:
-        exam_data = asyncio.run(scraper.scrape_exam(provider, exam_code))
+        exam_data = asyncio.run(
+            scraper.scrape_exam(provider, exam_code, mode=mode, batch_size=batch_size)
+        )
     except Exception as e:
         console.print(f"[red]Error scraping exam: {e}[/red]")
         raise typer.Exit(1)
