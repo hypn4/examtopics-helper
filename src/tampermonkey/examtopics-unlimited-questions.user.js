@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name         ExamTopics Helper
-// @namespace    http://tampermonkey.net/
-// @version      2.0
+// @namespace    https://github.com/hypn4/examtopics-helper
+// @version      2.1
 // @description  Remove 50 question limit, auto-reveal solutions, and provide solution controls
-// @author       You
+// @author       hypn4
+// @homepageURL  https://github.com/hypn4/examtopics-helper
+// @supportURL   https://github.com/hypn4/examtopics-helper/issues
+// @updateURL    https://raw.githubusercontent.com/hypn4/examtopics-helper/main/src/tampermonkey/examtopics-unlimited-questions.user.js
+// @downloadURL  https://raw.githubusercontent.com/hypn4/examtopics-helper/main/src/tampermonkey/examtopics-unlimited-questions.user.js
 // @match        https://www.examtopics.com/exams/*/view/*
 // @match        https://www.examtopics.com/exams/*/*/view/*
 // @match        https://www.examtopics.com/exams/*/custom-view/*
