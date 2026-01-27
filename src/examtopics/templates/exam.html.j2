@@ -15,6 +15,9 @@
             --text-color: #1e293b;
             --text-muted: #64748b;
             --border-color: #e2e8f0;
+            --sidebar-width: 240px;
+            --toc-hover-bg: #f1f5f9;
+            --toc-active-bg: #e0f2fe;
         }
 
         * {
@@ -28,6 +31,139 @@
             line-height: 1.6;
             color: var(--text-color);
             background-color: var(--bg-color);
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            margin-bottom: 0.75rem;
+        }
+
+        #toggle-all-answers {
+            width: 100%;
+            padding: 0.5rem 1rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        #toggle-all-answers:hover {
+            background: #1d4ed8;
+        }
+
+        #toggle-all-answers.answers-hidden {
+            background: var(--success-color);
+        }
+
+        #toggle-all-answers.answers-hidden:hover {
+            background: #15803d;
+        }
+
+        .toc {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem 0;
+        }
+
+        .toc-list {
+            list-style: none;
+        }
+
+        .toc-item a {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            color: var(--text-color);
+            font-size: 0.875rem;
+            transition: background-color 0.15s;
+        }
+
+        .toc-item a:hover {
+            background: var(--toc-hover-bg);
+        }
+
+        .toc-item.active a {
+            background: var(--toc-active-bg);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .toc-topic {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-color);
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+        }
+
+        /* Mobile sidebar toggle */
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            width: 48px;
+            height: 48px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            font-size: 1.25rem;
+        }
+
+        .sidebar-toggle:hover {
+            background: #1d4ed8;
+        }
+
+        /* Sidebar overlay for mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: var(--sidebar-width);
             padding: 2rem;
         }
 
@@ -61,6 +197,7 @@
             margin-bottom: 2rem;
             padding: 1.5rem;
             page-break-inside: avoid;
+            scroll-margin-top: 1rem;
         }
 
         .question-header {
@@ -128,6 +265,11 @@
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
+            transition: opacity 0.2s, height 0.2s;
+        }
+
+        .answer-section.hidden {
+            display: none;
         }
 
         .answer-section h4 {
@@ -201,7 +343,49 @@
             font-size: 0.85rem;
         }
 
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .question-card {
+                padding: 1rem;
+            }
+        }
+
+        /* Print Styles */
         @media print {
+            .sidebar,
+            .sidebar-toggle,
+            .sidebar-overlay {
+                display: none !important;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
             body {
                 padding: 0;
                 background: white;
@@ -211,74 +395,229 @@
                 box-shadow: none;
                 border: 1px solid var(--border-color);
             }
+
+            .answer-section {
+                display: block !important;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>{{ exam.title }}</h1>
-            <p class="meta">
-                Provider: {{ exam.provider }} |
-                Total Questions: {{ exam.total_questions }} |
-                Extracted: {{ exam.extracted_at[:10] }}
-            </p>
-        </header>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Questions</h2>
+            <button id="toggle-all-answers">Hide Answers</button>
+        </div>
+        <nav class="toc">
+            <ul class="toc-list">
+                {% for question in exam.questions %}
+                <li class="toc-item" data-question="{{ question.number }}">
+                    <a href="#question-{{ question.number }}">
+                        Q{{ question.number }}
+                        {% if question.topic %}<span class="toc-topic">T{{ question.topic }}</span>{% endif %}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </nav>
+    </aside>
 
-        <main>
-            {% for question in exam.questions %}
-            <article class="question-card">
-                <div class="question-header">
-                    <span class="question-number">Question #{{ question.number }}</span>
-                    {% if question.topic %}
-                    <span class="question-topic">Topic {{ question.topic }}</span>
-                    {% endif %}
-                </div>
+    <!-- Mobile sidebar toggle button -->
+    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+        <span id="sidebar-toggle-icon">&#9776;</span>
+    </button>
 
-                <div class="question-text">{{ question.text }}</div>
+    <!-- Overlay for mobile sidebar -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-                <ul class="choices">
-                    {% for choice in question.choices %}
-                    <li class="choice">
-                        <span class="choice-label">{{ choice.label }}.</span>
-                        <span class="choice-text">
-                            {% if choice.image_url %}
-                            <img src="{{ choice.image_url }}" alt="{{ choice.text }}" class="choice-image">
-                            {% else %}
-                            {{ choice.text }}
-                            {% endif %}
-                        </span>
-                    </li>
-                    {% endfor %}
-                </ul>
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <header>
+                <h1>{{ exam.title }}</h1>
+                <p class="meta">
+                    Provider: {{ exam.provider }} |
+                    Total Questions: {{ exam.total_questions }} |
+                    Extracted: {{ exam.extracted_at[:10] }}
+                </p>
+            </header>
 
-                <div class="answer-section">
-                    <h4>Correct Answer</h4>
-                    <span class="correct-answer">{{ question.correct_answer or "Not available" }}</span>
-
-                    {% if question.community_votes %}
-                    <div class="community-votes">
-                        <h5>Community Votes</h5>
-                        {% for vote in question.community_votes %}
-                        <div class="vote-bar">
-                            <span class="vote-label">{{ vote.answer }}</span>
-                            <div class="vote-progress">
-                                <div class="vote-progress-fill {% if vote.is_most_voted %}most-voted{% endif %}"
-                                     style="width: {{ vote.vote_percentage }}%"></div>
-                            </div>
-                            <span class="vote-percentage">{{ vote.vote_percentage }}% ({{ vote.vote_count }})</span>
-                        </div>
-                        {% endfor %}
+            <main>
+                {% for question in exam.questions %}
+                <article class="question-card" id="question-{{ question.number }}">
+                    <div class="question-header">
+                        <span class="question-number">Question #{{ question.number }}</span>
+                        {% if question.topic %}
+                        <span class="question-topic">Topic {{ question.topic }}</span>
+                        {% endif %}
                     </div>
-                    {% endif %}
-                </div>
-            </article>
-            {% endfor %}
-        </main>
 
-        <footer>
-            <p>Generated by ExamTopics Helper</p>
-        </footer>
+                    <div class="question-text">{{ question.text }}</div>
+
+                    <ul class="choices">
+                        {% for choice in question.choices %}
+                        <li class="choice">
+                            <span class="choice-label">{{ choice.label }}.</span>
+                            <span class="choice-text">
+                                {% if choice.image_url %}
+                                <img src="{{ choice.image_url }}" alt="{{ choice.text }}" class="choice-image">
+                                {% else %}
+                                {{ choice.text }}
+                                {% endif %}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+
+                    <div class="answer-section">
+                        <h4>Correct Answer</h4>
+                        <span class="correct-answer">{{ question.correct_answer or "Not available" }}</span>
+
+                        {% if question.community_votes %}
+                        <div class="community-votes">
+                            <h5>Community Votes</h5>
+                            {% for vote in question.community_votes %}
+                            <div class="vote-bar">
+                                <span class="vote-label">{{ vote.answer }}</span>
+                                <div class="vote-progress">
+                                    <div class="vote-progress-fill {% if vote.is_most_voted %}most-voted{% endif %}"
+                                         style="width: {{ vote.vote_percentage }}%"></div>
+                                </div>
+                                <span class="vote-percentage">{{ vote.vote_percentage }}% ({{ vote.vote_count }})</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </main>
+
+            <footer>
+                <p>Generated by ExamTopics Helper</p>
+            </footer>
+        </div>
     </div>
+
+    <script>
+        (function() {
+            // DOM Elements
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const toggleAnswersBtn = document.getElementById('toggle-all-answers');
+            const tocItems = document.querySelectorAll('.toc-item');
+            const questionCards = document.querySelectorAll('.question-card');
+            const answerSections = document.querySelectorAll('.answer-section');
+
+            // State
+            const STORAGE_KEY = 'examtopics-answers-hidden';
+            let answersHidden = localStorage.getItem(STORAGE_KEY) === 'true';
+
+            // Initialize answer visibility from localStorage
+            function initAnswerVisibility() {
+                if (answersHidden) {
+                    answerSections.forEach(section => section.classList.add('hidden'));
+                    toggleAnswersBtn.textContent = 'Show Answers';
+                    toggleAnswersBtn.classList.add('answers-hidden');
+                }
+            }
+
+            // Toggle all answers visibility
+            function toggleAnswers() {
+                answersHidden = !answersHidden;
+                localStorage.setItem(STORAGE_KEY, answersHidden);
+
+                answerSections.forEach(section => {
+                    section.classList.toggle('hidden', answersHidden);
+                });
+
+                toggleAnswersBtn.textContent = answersHidden ? 'Show Answers' : 'Hide Answers';
+                toggleAnswersBtn.classList.toggle('answers-hidden', answersHidden);
+            }
+
+            // Toggle mobile sidebar
+            function toggleSidebar() {
+                sidebar.classList.toggle('open');
+                sidebarOverlay.classList.toggle('active');
+            }
+
+            // Close sidebar when clicking overlay
+            function closeSidebar() {
+                sidebar.classList.remove('open');
+                sidebarOverlay.classList.remove('active');
+            }
+
+            // Throttle function for scroll events
+            function throttle(func, limit) {
+                let inThrottle;
+                return function() {
+                    const args = arguments;
+                    const context = this;
+                    if (!inThrottle) {
+                        func.apply(context, args);
+                        inThrottle = true;
+                        setTimeout(() => inThrottle = false, limit);
+                    }
+                };
+            }
+
+            // Update active TOC item based on scroll position
+            function updateActiveTocItem() {
+                let currentQuestion = null;
+                const scrollTop = window.scrollY;
+                const windowHeight = window.innerHeight;
+
+                questionCards.forEach(card => {
+                    const rect = card.getBoundingClientRect();
+                    const cardTop = rect.top + scrollTop;
+
+                    // Consider a question "active" if it's in the top half of the viewport
+                    if (cardTop <= scrollTop + windowHeight / 3) {
+                        currentQuestion = card.id.replace('question-', '');
+                    }
+                });
+
+                tocItems.forEach(item => {
+                    const questionNum = item.dataset.question;
+                    item.classList.toggle('active', questionNum === currentQuestion);
+                });
+
+                // Scroll active TOC item into view in sidebar
+                const activeItem = document.querySelector('.toc-item.active');
+                if (activeItem) {
+                    const toc = document.querySelector('.toc');
+                    const tocRect = toc.getBoundingClientRect();
+                    const itemRect = activeItem.getBoundingClientRect();
+
+                    if (itemRect.top < tocRect.top || itemRect.bottom > tocRect.bottom) {
+                        activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                }
+            }
+
+            // Close sidebar on link click (mobile)
+            function handleTocLinkClick() {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            }
+
+            // Event Listeners
+            toggleAnswersBtn.addEventListener('click', toggleAnswers);
+            sidebarToggle.addEventListener('click', toggleSidebar);
+            sidebarOverlay.addEventListener('click', closeSidebar);
+            window.addEventListener('scroll', throttle(updateActiveTocItem, 100));
+
+            tocItems.forEach(item => {
+                item.querySelector('a').addEventListener('click', handleTocLinkClick);
+            });
+
+            // Initialize
+            initAnswerVisibility();
+            updateActiveTocItem();
+        })();
+    </script>
 </body>
 </html>
