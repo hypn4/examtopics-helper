@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ exam.title }}</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #16a34a;
+            --warning-color: #d97706;
+            --error-color: #dc2626;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        header h1 {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        header .meta {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .question-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            page-break-inside: avoid;
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .question-number {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        .question-topic {
+            background: var(--bg-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .question-text {
+            margin-bottom: 1.25rem;
+            font-size: 1rem;
+            white-space: pre-wrap;
+        }
+
+        .choices {
+            list-style: none;
+            margin-bottom: 1.25rem;
+        }
+
+        .choice {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            background: var(--bg-color);
+            border-radius: 8px;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .choice-label {
+            font-weight: 600;
+            color: var(--primary-color);
+            min-width: 1.5rem;
+        }
+
+        .choice-text {
+            flex: 1;
+        }
+
+        .choice-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
+        .answer-section {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .answer-section h4 {
+            color: var(--success-color);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .correct-answer {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--success-color);
+        }
+
+        .community-votes {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed var(--border-color);
+        }
+
+        .community-votes h5 {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .vote-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+        }
+
+        .vote-label {
+            min-width: 2rem;
+            font-weight: 600;
+        }
+
+        .vote-progress {
+            flex: 1;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            margin: 0 0.5rem;
+            overflow: hidden;
+        }
+
+        .vote-progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .vote-progress-fill.most-voted {
+            background: var(--success-color);
+        }
+
+        .vote-percentage {
+            min-width: 3.5rem;
+            text-align: right;
+            color: var(--text-muted);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .question-card {
+                box-shadow: none;
+                border: 1px solid var(--border-color);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{ exam.title }}</h1>
+            <p class="meta">
+                Provider: {{ exam.provider }} |
+                Total Questions: {{ exam.total_questions }} |
+                Extracted: {{ exam.extracted_at[:10] }}
+            </p>
+        </header>
+
+        <main>
+            {% for question in exam.questions %}
+            <article class="question-card">
+                <div class="question-header">
+                    <span class="question-number">Question #{{ question.number }}</span>
+                    {% if question.topic %}
+                    <span class="question-topic">Topic {{ question.topic }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="question-text">{{ question.text }}</div>
+
+                <ul class="choices">
+                    {% for choice in question.choices %}
+                    <li class="choice">
+                        <span class="choice-label">{{ choice.label }}.</span>
+                        <span class="choice-text">
+                            {% if choice.image_url %}
+                            <img src="{{ choice.image_url }}" alt="{{ choice.text }}" class="choice-image">
+                            {% else %}
+                            {{ choice.text }}
+                            {% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="answer-section">
+                    <h4>Correct Answer</h4>
+                    <span class="correct-answer">{{ question.correct_answer or "Not available" }}</span>
+
+                    {% if question.community_votes %}
+                    <div class="community-votes">
+                        <h5>Community Votes</h5>
+                        {% for vote in question.community_votes %}
+                        <div class="vote-bar">
+                            <span class="vote-label">{{ vote.answer }}</span>
+                            <div class="vote-progress">
+                                <div class="vote-progress-fill {% if vote.is_most_voted %}most-voted{% endif %}"
+                                     style="width: {{ vote.vote_percentage }}%"></div>
+                            </div>
+                            <span class="vote-percentage">{{ vote.vote_percentage }}% ({{ vote.vote_count }})</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </main>
+
+        <footer>
+            <p>Generated by ExamTopics Helper</p>
+        </footer>
+    </div>
+</body>
+</html>
