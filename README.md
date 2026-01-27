@@ -116,6 +116,46 @@ examtopics extract \
   --delay 2.0
 ```
 
+### Loading Modes
+
+The scraper supports multiple loading strategies to handle different exam configurations:
+
+| Mode | Description | Best For |
+|------|-------------|----------|
+| `paginated` | Load 50 questions per page (default) | Most reliable, works with all exams |
+| `bulk` | Load all questions at once via custom-view | Fast, but may not work on all exams |
+| `range` | Load in batches using question range filter | Large exams, configurable batch size |
+| `auto` | Try bulk → range → paginated automatically | Recommended for best performance |
+
+```bash
+# Use auto mode (recommended) - tries fastest method first
+examtopics extract \
+  --exam "amazon/dop-c02" \
+  --cookie "..." \
+  --mode auto
+
+# Use bulk mode for faster extraction
+examtopics extract \
+  --exam "amazon/dop-c02" \
+  --cookie "..." \
+  --mode bulk
+
+# Use range mode with custom batch size
+examtopics extract \
+  --exam "amazon/dop-c02" \
+  --cookie "..." \
+  --mode range \
+  --batch-size 50
+```
+
+You can also set the mode via environment variables:
+
+```bash
+# In .env file
+EXAMTOPICS_MODE="auto"
+EXAMTOPICS_BATCH_SIZE="100"
+```
+
 ### Get Exam Info
 
 ```bash
