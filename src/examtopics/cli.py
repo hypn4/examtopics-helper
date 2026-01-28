@@ -1,6 +1,7 @@
 """CLI interface for ExamTopics Helper using Typer."""
 
 import asyncio
+import os
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Optional
@@ -22,6 +23,76 @@ from examtopics.models import Exam
 from examtopics.scraper import ExamTopicsScraper, LoadingMode, parse_cookie_string
 
 load_dotenv()  # Load environment variables from .env file
+
+
+def get_cookies_from_env(console: Console) -> dict[str, str] | None:
+    """Get cookies from individual environment variables.
+
+    Returns combined cookies dict, or None if no env vars are set.
+    Displays warning if only some env vars are set.
+    """
+    env_mapping = {
+        "EXAMTOPICS_SESSIONID": "sessionid",
+        "EXAMTOPICS_CF_CLEARANCE": "cf_clearance",
+        "EXAMTOPICS_CSRFTOKEN": "csrftoken",
+    }
+    cookies = {}
+    missing = []
+
+    for env_var, cookie_name in env_mapping.items():
+        value = os.environ.get(env_var)
+        if value:
+            cookies[cookie_name] = value
+        else:
+            missing.append(env_var)
+
+    # Warn if only some env vars are set
+    if cookies and missing:
+        console.print(
+            f"[yellow]Warning: Missing cookie env vars: {', '.join(missing)}[/yellow]"
+        )
+
+    return cookies if cookies else None
+
+
+def resolve_cookies(cookie: str | None, console: Console) -> dict[str, str]:
+    """Resolve cookies from CLI option, individual env vars, or EXAMTOPICS_COOKIE.
+
+    Priority:
+    1. CLI --cookie option
+    2. Individual env vars (EXAMTOPICS_SESSIONID, etc.)
+    3. EXAMTOPICS_COOKIE env var (legacy)
+    """
+    # 1. CLI --cookie option
+    if cookie:
+        cookies = parse_cookie_string(cookie)
+        if not cookies:
+            console.print("[red]Error: Invalid cookie string[/red]")
+            raise typer.Exit(1)
+        return cookies
+
+    # 2. Individual environment variables
+    cookies = get_cookies_from_env(console)
+    if cookies:
+        return cookies
+
+    # 3. EXAMTOPICS_COOKIE (legacy)
+    env_cookie = os.environ.get("EXAMTOPICS_COOKIE")
+    if env_cookie:
+        cookies = parse_cookie_string(env_cookie)
+        if cookies:
+            return cookies
+
+    # No cookies found
+    console.print(
+        "[red]Error: Cookie required.[/red]\n"
+        "[yellow]Options:[/yellow]\n"
+        "  1. --cookie option\n"
+        "  2. Set EXAMTOPICS_SESSIONID, EXAMTOPICS_CF_CLEARANCE, EXAMTOPICS_CSRFTOKEN\n"
+        "  3. Set EXAMTOPICS_COOKIE"
+    )
+    raise typer.Exit(1)
+
 
 app = typer.Typer(
     name="examtopics",
@@ -87,9 +158,7 @@ def _export_exam(
                 exported_files.append(("Markdown", path))
 
             elif fmt == OutputFormat.json:
-                json_path = (
-                    output_dir / f"{exam_data.provider}_{exam_data.code}.json"
-                )
+                json_path = output_dir / f"{exam_data.provider}_{exam_data.code}.json"
                 json_path.write_text(exam_data.to_json(), encoding="utf-8")
                 exported_files.append(("JSON", json_path))
 
@@ -155,8 +224,7 @@ def extract(
         typer.Option(
             "--cookie",
             "-c",
-            envvar="EXAMTOPICS_COOKIE",
-            help="Session cookie string (or set EXAMTOPICS_COOKIE env var)",
+            help="Session cookie string",
         ),
     ] = None,
     output_dir: Annotated[
@@ -234,17 +302,8 @@ def extract(
         if PDF_AVAILABLE:
             formats.insert(1, OutputFormat.pdf)
 
-    # Parse cookies
-    if not cookie:
-        console.print(
-            "[red]Error: Cookie required. Use --cookie or set EXAMTOPICS_COOKIE env var[/red]"
-        )
-        raise typer.Exit(1)
-
-    cookies = parse_cookie_string(cookie)
-    if not cookies:
-        console.print("[red]Error: Invalid cookie string[/red]")
-        raise typer.Exit(1)
+    # Resolve cookies (CLI > individual env vars > EXAMTOPICS_COOKIE)
+    cookies = resolve_cookies(cookie, console)
 
     # Show configuration
     mode_info = f"{mode.value}"
@@ -403,9 +462,7 @@ def render(
     # Watch mode
     if watch:
         if not WATCH_AVAILABLE:
-            console.print(
-                "[red]Error: Watch mode requires watchfiles package.[/red]"
-            )
+            console.print("[red]Error: Watch mode requires watchfiles package.[/red]")
             console.print(
                 "[yellow]Install with: uv pip install examtopics-helper[watch][/yellow]"
             )
@@ -453,8 +510,7 @@ def info(
         typer.Option(
             "--cookie",
             "-c",
-            envvar="EXAMTOPICS_COOKIE",
-            help="Session cookie string (or set EXAMTOPICS_COOKIE env var)",
+            help="Session cookie string",
         ),
     ] = None,
 ) -> None:
@@ -468,16 +524,8 @@ def info(
 
     provider, exam_code = parts
 
-    if not cookie:
-        console.print(
-            "[red]Error: Cookie required. Use --cookie or set EXAMTOPICS_COOKIE env var[/red]"
-        )
-        raise typer.Exit(1)
-
-    cookies = parse_cookie_string(cookie)
-    if not cookies:
-        console.print("[red]Error: Invalid cookie string[/red]")
-        raise typer.Exit(1)
+    # Resolve cookies (CLI > individual env vars > EXAMTOPICS_COOKIE)
+    cookies = resolve_cookies(cookie, console)
 
     scraper = ExamTopicsScraper(cookies=cookies)
 
