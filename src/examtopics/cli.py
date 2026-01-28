@@ -121,6 +121,14 @@ def extract(
             help="Batch size for range mode (or set EXAMTOPICS_BATCH_SIZE env var)",
         ),
     ] = 100,
+    include_discussions: Annotated[
+        bool,
+        typer.Option(
+            "--discussions",
+            envvar="EXAMTOPICS_DISCUSSIONS",
+            help="Include discussion comments (slower, requires additional requests)",
+        ),
+    ] = False,
 ) -> None:
     """Extract exam questions from ExamTopics and export to various formats.
 
@@ -169,7 +177,8 @@ def extract(
             f"[bold]Output:[/bold] {output_dir.absolute()}\n"
             f"[bold]Formats:[/bold] {', '.join(f.value for f in formats)}\n"
             f"[bold]Mode:[/bold] {mode_info}\n"
-            f"[bold]Delay:[/bold] {delay}s",
+            f"[bold]Delay:[/bold] {delay}s\n"
+            f"[bold]Discussions:[/bold] {'Yes' if include_discussions else 'No'}",
             title="ExamTopics Extractor",
             border_style="blue",
         )
@@ -180,7 +189,13 @@ def extract(
 
     try:
         exam_data = asyncio.run(
-            scraper.scrape_exam(provider, exam_code, mode=mode, batch_size=batch_size)
+            scraper.scrape_exam(
+                provider,
+                exam_code,
+                mode=mode,
+                batch_size=batch_size,
+                include_discussions=include_discussions,
+            )
         )
     except Exception as e:
         console.print(f"[red]Error scraping exam: {e}[/red]")

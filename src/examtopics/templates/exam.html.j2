@@ -1,3 +1,33 @@
+{# Macro for rendering comments recursively #}
+{% macro render_comment(comment) %}
+<div class="comment">
+    <div class="comment-header">
+        <span class="comment-username">{{ comment.username }}</span>
+        {% if comment.is_highly_voted %}
+        <span class="comment-badge highly-voted">Highly Voted</span>
+        {% endif %}
+        {% if comment.is_most_recent %}
+        <span class="comment-badge most-recent">Most Recent</span>
+        {% endif %}
+        <span class="comment-date" title="{{ comment.date }}">{{ comment.date_relative }}</span>
+    </div>
+    {% if comment.selected_answer %}
+    <div class="comment-selected-answer">Selected Answer: {{ comment.selected_answer }}</div>
+    {% endif %}
+    <div class="comment-content">{{ comment.content }}</div>
+    <div class="comment-footer">
+        <span class="comment-upvotes">&#9650; {{ comment.upvotes }}</span>
+    </div>
+    {% if comment.replies %}
+    <div class="comment-replies">
+        {% for reply in comment.replies %}
+        {{ render_comment(reply) }}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -334,6 +364,106 @@
             color: var(--text-muted);
         }
 
+        /* Discussion Styles */
+        .discussion-section {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--border-color);
+        }
+
+        .discussion-section h4 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .comment {
+            background: var(--bg-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .comment-username {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .comment-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .comment-badge.highly-voted {
+            background: var(--success-color);
+        }
+
+        .comment-badge.most-recent {
+            background: var(--warning-color);
+        }
+
+        .comment-date {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .comment-selected-answer {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            color: var(--primary-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        .comment-content {
+            color: var(--text-color);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .comment-footer {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .comment-upvotes {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .comment-replies {
+            margin-left: 1.5rem;
+            margin-top: 0.75rem;
+            padding-left: 1rem;
+            border-left: 2px solid var(--border-color);
+        }
+
+        .comment-replies .comment {
+            background: white;
+        }
+
         footer {
             text-align: center;
             margin-top: 3rem;
@@ -490,6 +620,15 @@
                         </div>
                         {% endif %}
                     </div>
+
+                    {% if question.discussions %}
+                    <div class="discussion-section">
+                        <h4>Discussion ({{ question.discussions|length }})</h4>
+                        {% for comment in question.discussions %}
+                        {{ render_comment(comment) }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </article>
                 {% endfor %}
             </main>

@@ -1,3 +1,16 @@
+{# Macro for rendering comments recursively in markdown #}
+{% macro render_comment(comment, depth) %}
+{% set indent = '>' * (depth + 1) %}
+{{ indent }} **{{ comment.username }}**{% if comment.selected_answer %} (Selected: {{ comment.selected_answer }}){% endif %}{% if comment.is_highly_voted %} 🏆{% endif %}{% if comment.is_most_recent %} 🕐{% endif %} - {{ comment.date_relative }}
+{{ indent }}
+{{ indent }} {{ comment.content }}
+{{ indent }}
+{{ indent }} 👍 {{ comment.upvotes }}
+{% for reply in comment.replies %}
+{{ render_comment(reply, depth + 1) }}
+{% endfor %}
+{% endmacro %}
+
 # {{ exam.title }}
 
 **Provider:** {{ exam.provider }}
@@ -24,6 +37,14 @@
 {% for vote in question.community_votes %}
 - {{ vote.answer }}: {{ vote.vote_percentage }}% ({{ vote.vote_count }} votes){% if vote.is_most_voted %} ⭐{% endif %}
 
+{% endfor %}
+{% endif %}
+
+{% if question.discussions %}
+### Discussion
+
+{% for comment in question.discussions %}
+{{ render_comment(comment, 0) }}
 {% endfor %}
 {% endif %}
 

@@ -1,5 +1,7 @@
 """Pydantic data models for ExamTopics questions and exams."""
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -22,16 +24,33 @@ class Choice(BaseModel):
     image_url: str | None = None  # Image URL for image-based choices
 
 
+class Discussion(BaseModel):
+    """A single discussion comment."""
+
+    comment_id: int
+    username: str
+    date: str  # "Sun 22 Sep 2024 14:59"
+    date_relative: str  # "1 year, 4 months ago"
+    selected_answer: str | None = None  # "A", "B", etc.
+    content: str
+    upvotes: int = 0
+    is_highly_voted: bool = False
+    is_most_recent: bool = False
+    replies: list[Discussion] = Field(default_factory=list)
+
+
 class Question(BaseModel):
     """A single exam question with answers and community votes."""
 
     number: int
     topic: int | None = None
+    question_id: int | None = None  # ID for fetching discussions
     text: str
     choices: list[Choice]
     correct_answer: str  # Official answer (e.g., "A", "AB", "BCD")
     community_votes: list[VotedAnswer] = Field(default_factory=list)
     discussion_count: int = 0
+    discussions: list[Discussion] = Field(default_factory=list)
 
 
 class Exam(BaseModel):

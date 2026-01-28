@@ -17,7 +17,7 @@ from rich.progress import (
 )
 from selectolax.parser import HTMLParser
 
-from examtopics.models import Choice, Exam, Question, VotedAnswer
+from examtopics.models import Choice, Discussion, Exam, Question, VotedAnswer
 
 
 class LoadingMode(str, Enum):
@@ -211,6 +211,111 @@ class ExamTopicsScraper:
                 return int(match.group(1))
         return 0
 
+    def _parse_question_id(self, card: Any) -> int | None:
+        """Extract question ID from card's data-id attribute."""
+        question_body = card.css_first(".question-body")
+        if question_body:
+            qid = question_body.attributes.get("data-id")
+            if qid:
+                return int(qid)
+        return None
+
+    async def _fetch_discussion(
+        self,
+        client: httpx.AsyncClient,
+        question_id: int,
+    ) -> str | None:
+        """Fetch discussion HTML for a question."""
+        url = f"{self.BASE_URL}/ajax/discussion/exam-question/{question_id}/"
+        headers = {
+            **self.headers,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.text
+        except Exception:
+            pass
+        return None
+
+    def _parse_discussions(self, html: str) -> list[Discussion]:
+        """Parse discussions from HTML response."""
+        tree = HTMLParser(html)
+        discussions = []
+
+        # Only parse top-level comment containers (direct children, not nested replies)
+        for comment in tree.css(".comment-container"):
+            # Check if this is a top-level comment (not inside comment-replies)
+            parent = comment.parent
+            if parent and "comment-replies" in (parent.attributes.get("class") or ""):
+                continue
+            discussion = self._parse_single_discussion(comment)
+            if discussion:
+                discussions.append(discussion)
+
+        return discussions
+
+    def _parse_single_discussion(self, comment: Any) -> Discussion | None:
+        """Parse a single discussion comment (recursive for replies)."""
+        comment_id = int(comment.attributes.get("data-comment-id", 0))
+        if not comment_id:
+            return None
+
+        username_elem = comment.css_first(".comment-username")
+        username = username_elem.text(strip=True) if username_elem else "Unknown"
+
+        date_elem = comment.css_first(".comment-date")
+        date = date_elem.attributes.get("title", "") if date_elem else ""
+        date_relative = date_elem.text(strip=True) if date_elem else ""
+
+        selected_answer = None
+        answer_elem = comment.css_first(".comment-selected-answers strong")
+        if answer_elem:
+            selected_answer = answer_elem.text(strip=True)
+
+        content_elem = comment.css_first(".comment-content")
+        content = content_elem.text(strip=True) if content_elem else ""
+
+        upvote_elem = comment.css_first(".upvote-count")
+        upvotes = 0
+        if upvote_elem:
+            upvote_text = upvote_elem.text(strip=True)
+            if upvote_text.isdigit():
+                upvotes = int(upvote_text)
+
+        badge_elem = comment.css_first(".badge-primary")
+        badge_text = badge_elem.text(strip=True) if badge_elem else ""
+        is_highly_voted = "Highly Voted" in badge_text
+        is_most_recent = "Most Recent" in badge_text
+
+        # Recursively parse replies (only direct children)
+        replies = []
+        replies_container = comment.css_first(".comment-replies")
+        if replies_container:
+            # Get direct children only by iterating
+            for child in replies_container.iter():
+                if (
+                    child.tag == "div"
+                    and "comment-container" in (child.attributes.get("class") or "")
+                ):
+                    reply_discussion = self._parse_single_discussion(child)
+                    if reply_discussion:
+                        replies.append(reply_discussion)
+
+        return Discussion(
+            comment_id=comment_id,
+            username=username,
+            date=date,
+            date_relative=date_relative,
+            selected_answer=selected_answer,
+            content=content,
+            upvotes=upvotes,
+            is_highly_voted=is_highly_voted,
+            is_most_recent=is_most_recent,
+            replies=replies,
+        )
+
     def _parse_question(
         self, card: Any, base_number: int, index: int
     ) -> Question | None:
@@ -270,9 +375,13 @@ class ExamTopicsScraper:
         # Parse discussion count
         discussion_count = self._parse_discussion_count(card)
 
+        # Parse question ID for discussion fetching
+        question_id = self._parse_question_id(card)
+
         return Question(
             number=number,
             topic=topic,
+            question_id=question_id,
             text=question_text,
             choices=choices,
             correct_answer=correct_answer,
@@ -597,6 +706,7 @@ class ExamTopicsScraper:
         exam_code: str,
         mode: LoadingMode = LoadingMode.PAGINATED,
         batch_size: int | None = None,
+        include_discussions: bool = False,
     ) -> Exam:
         """Scrape an entire exam with all questions.
 
@@ -605,6 +715,7 @@ class ExamTopicsScraper:
             exam_code: Exam code slug (e.g., "aws-certified-devops-engineer-professional-dop-c02")
             mode: Loading mode (paginated, bulk, range, auto)
             batch_size: Batch size for range mode (default: 100)
+            include_discussions: Whether to fetch discussion comments (slower)
 
         Returns:
             Exam object with all questions
@@ -725,6 +836,46 @@ class ExamTopicsScraper:
             console.print(
                 f"[green]Successfully scraped {len(all_questions)} questions[/green]"
             )
+
+            # Fetch discussions if requested
+            if include_discussions:
+                questions_with_ids = [
+                    q for q in all_questions if q.question_id is not None
+                ]
+                if questions_with_ids:
+                    console.print(
+                        f"[cyan]Fetching discussions for {len(questions_with_ids)} questions...[/cyan]"
+                    )
+
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        console=console,
+                    ) as progress:
+                        task = progress.add_task(
+                            "[cyan]Fetching discussions...",
+                            total=len(questions_with_ids),
+                        )
+
+                        for question in questions_with_ids:
+                            await asyncio.sleep(self.delay)
+                            html = await self._fetch_discussion(
+                                client, question.question_id
+                            )
+                            if html:
+                                question.discussions = self._parse_discussions(html)
+                            progress.update(task, advance=1)
+
+                    total_discussions = sum(len(q.discussions) for q in all_questions)
+                    console.print(
+                        f"[green]Fetched {total_discussions} discussions[/green]"
+                    )
+                else:
+                    console.print(
+                        "[yellow]No question IDs found for discussion fetching[/yellow]"
+                    )
 
             return Exam(
                 provider=provider,
