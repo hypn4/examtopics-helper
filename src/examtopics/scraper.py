@@ -295,9 +295,8 @@ class ExamTopicsScraper:
         if replies_container:
             # Get direct children only by iterating
             for child in replies_container.iter():
-                if (
-                    child.tag == "div"
-                    and "comment-container" in (child.attributes.get("class") or "")
+                if child.tag == "div" and "comment-container" in (
+                    child.attributes.get("class") or ""
                 ):
                     reply_discussion = self._parse_single_discussion(child)
                     if reply_discussion:
