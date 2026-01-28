@@ -148,7 +148,15 @@ examtopics extract \
   --exam "google/cloud-digital-leader" \
   --cookie "..." \
   --delay 2.0
+
+# Include discussion comments (slower)
+examtopics extract \
+  --exam "amazon/dop-c02" \
+  --cookie "..." \
+  --discussions
 ```
+
+> **Note:** `--discussions` 옵션은 질문당 추가 API 요청이 필요하므로 추출 시간이 더 걸립니다.
 
 ### Loading Modes
 
@@ -207,6 +215,17 @@ examtopics info \
 | **PDF** | Print-ready PDF document (requires system libraries) |
 | **Markdown** | Plain text markdown for notes/Obsidian |
 | **JSON** | Raw structured data for custom processing |
+
+## HTML Output Features
+
+The generated HTML file includes interactive features:
+
+| Feature | Description |
+|---------|-------------|
+| **TOC Sidebar** | Question list sidebar for quick navigation |
+| **Hide/Show Answers** | Global toggle in sidebar + individual toggle per question |
+| **Hide/Show Discussions** | Global toggle in sidebar + individual toggle per question |
+| **State Persistence** | Toggle states saved to localStorage, persists across page reloads |
 
 ## Project Structure
 
