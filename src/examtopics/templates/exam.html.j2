@@ -89,7 +89,15 @@
             margin-bottom: 0.75rem;
         }
 
-        #toggle-all-answers {
+
+        /* Sidebar buttons group */
+        .sidebar-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .sidebar-buttons button {
             width: 100%;
             padding: 0.5rem 1rem;
             background: var(--primary-color);
@@ -102,15 +110,15 @@
             transition: background-color 0.2s;
         }
 
-        #toggle-all-answers:hover {
+        .sidebar-buttons button:hover {
             background: #1d4ed8;
         }
 
-        #toggle-all-answers.answers-hidden {
+        .sidebar-buttons button.hidden-state {
             background: var(--success-color);
         }
 
-        #toggle-all-answers.answers-hidden:hover {
+        .sidebar-buttons button.hidden-state:hover {
             background: #15803d;
         }
 
@@ -304,8 +312,12 @@
 
         .answer-section h4 {
             color: var(--success-color);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0;
             font-size: 0.9rem;
+        }
+
+        .answer-section .section-header {
+            margin-bottom: 0.5rem;
         }
 
         .correct-answer {
@@ -364,6 +376,39 @@
             color: var(--text-muted);
         }
 
+        /* Section header with toggle button */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Individual toggle button styles */
+        .toggle-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: var(--border-color);
+            color: var(--text-color);
+            transition: background-color 0.2s;
+        }
+
+        .toggle-btn:hover {
+            background: #cbd5e1;
+        }
+
+        /* Discussion content hidden state */
+        .discussion-content.hidden {
+            display: none;
+        }
+
+        /* Answer content hidden state */
+        .answer-content.hidden {
+            display: none;
+        }
+
         /* Discussion Styles */
         .discussion-section {
             margin-top: 1.5rem;
@@ -373,8 +418,12 @@
 
         .discussion-section h4 {
             color: var(--primary-color);
-            margin-bottom: 1rem;
+            margin-bottom: 0;
             font-size: 1rem;
+        }
+
+        .discussion-section .section-header {
+            margin-bottom: 1rem;
         }
 
         .comment {
@@ -537,7 +586,10 @@
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h2>Questions</h2>
-            <button id="toggle-all-answers">Hide Answers</button>
+            <div class="sidebar-buttons">
+                <button id="toggle-all-answers">Hide Answers</button>
+                <button id="toggle-all-discussions">Hide Discussions</button>
+            </div>
         </div>
         <nav class="toc">
             <ul class="toc-list">
@@ -601,32 +653,42 @@
                     </ul>
 
                     <div class="answer-section">
-                        <h4>Correct Answer</h4>
-                        <span class="correct-answer">{{ question.correct_answer or "Not available" }}</span>
-
-                        {% if question.community_votes %}
-                        <div class="community-votes">
-                            <h5>Community Votes</h5>
-                            {% for vote in question.community_votes %}
-                            <div class="vote-bar">
-                                <span class="vote-label">{{ vote.answer }}</span>
-                                <div class="vote-progress">
-                                    <div class="vote-progress-fill {% if vote.is_most_voted %}most-voted{% endif %}"
-                                         style="width: {{ vote.vote_percentage }}%"></div>
-                                </div>
-                                <span class="vote-percentage">{{ vote.vote_percentage }}% ({{ vote.vote_count }})</span>
-                            </div>
-                            {% endfor %}
+                        <div class="section-header">
+                            <h4>Correct Answer</h4>
+                            <button class="toggle-btn toggle-answer-btn">Hide</button>
                         </div>
-                        {% endif %}
+                        <div class="answer-content">
+                            <span class="correct-answer">{{ question.correct_answer or "Not available" }}</span>
+
+                            {% if question.community_votes %}
+                            <div class="community-votes">
+                                <h5>Community Votes</h5>
+                                {% for vote in question.community_votes %}
+                                <div class="vote-bar">
+                                    <span class="vote-label">{{ vote.answer }}</span>
+                                    <div class="vote-progress">
+                                        <div class="vote-progress-fill {% if vote.is_most_voted %}most-voted{% endif %}"
+                                             style="width: {{ vote.vote_percentage }}%"></div>
+                                    </div>
+                                    <span class="vote-percentage">{{ vote.vote_percentage }}% ({{ vote.vote_count }})</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
 
                     {% if question.discussions %}
                     <div class="discussion-section">
-                        <h4>Discussion ({{ question.discussions|length }})</h4>
-                        {% for comment in question.discussions %}
-                        {{ render_comment(comment) }}
-                        {% endfor %}
+                        <div class="section-header">
+                            <h4>Discussion ({{ question.discussions|length }})</h4>
+                            <button class="toggle-btn toggle-discussion-btn">Hide</button>
+                        </div>
+                        <div class="discussion-content">
+                            {% for comment in question.discussions %}
+                            {{ render_comment(comment) }}
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
                 </article>
@@ -645,35 +707,90 @@
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebar-toggle');
             const sidebarOverlay = document.getElementById('sidebar-overlay');
-            const toggleAnswersBtn = document.getElementById('toggle-all-answers');
+            const toggleAllAnswersBtn = document.getElementById('toggle-all-answers');
+            const toggleAllDiscussionsBtn = document.getElementById('toggle-all-discussions');
             const tocItems = document.querySelectorAll('.toc-item');
             const questionCards = document.querySelectorAll('.question-card');
-            const answerSections = document.querySelectorAll('.answer-section');
+            const answerContents = document.querySelectorAll('.answer-content');
+            const discussionContents = document.querySelectorAll('.discussion-content');
+            const toggleAnswerBtns = document.querySelectorAll('.toggle-answer-btn');
+            const toggleDiscussionBtns = document.querySelectorAll('.toggle-discussion-btn');
+
+            // Storage Keys
+            const ANSWERS_STORAGE_KEY = 'examtopics-answers-hidden';
+            const DISCUSSIONS_STORAGE_KEY = 'examtopics-discussions-hidden';
 
             // State
-            const STORAGE_KEY = 'examtopics-answers-hidden';
-            let answersHidden = localStorage.getItem(STORAGE_KEY) === 'true';
+            let answersHidden = localStorage.getItem(ANSWERS_STORAGE_KEY) === 'true';
+            let discussionsHidden = localStorage.getItem(DISCUSSIONS_STORAGE_KEY) === 'true';
 
-            // Initialize answer visibility from localStorage
-            function initAnswerVisibility() {
+            // Initialize visibility from localStorage
+            function initVisibility() {
+                // Initialize answers
                 if (answersHidden) {
-                    answerSections.forEach(section => section.classList.add('hidden'));
-                    toggleAnswersBtn.textContent = 'Show Answers';
-                    toggleAnswersBtn.classList.add('answers-hidden');
+                    answerContents.forEach(content => content.classList.add('hidden'));
+                    toggleAnswerBtns.forEach(btn => btn.textContent = 'Show');
+                    toggleAllAnswersBtn.textContent = 'Show Answers';
+                    toggleAllAnswersBtn.classList.add('hidden-state');
+                }
+
+                // Initialize discussions
+                if (discussionsHidden) {
+                    discussionContents.forEach(content => content.classList.add('hidden'));
+                    toggleDiscussionBtns.forEach(btn => btn.textContent = 'Show');
+                    toggleAllDiscussionsBtn.textContent = 'Show Discussions';
+                    toggleAllDiscussionsBtn.classList.add('hidden-state');
                 }
             }
 
             // Toggle all answers visibility
-            function toggleAnswers() {
+            function toggleAllAnswers() {
                 answersHidden = !answersHidden;
-                localStorage.setItem(STORAGE_KEY, answersHidden);
+                localStorage.setItem(ANSWERS_STORAGE_KEY, answersHidden);
 
-                answerSections.forEach(section => {
-                    section.classList.toggle('hidden', answersHidden);
+                answerContents.forEach(content => {
+                    content.classList.toggle('hidden', answersHidden);
                 });
 
-                toggleAnswersBtn.textContent = answersHidden ? 'Show Answers' : 'Hide Answers';
-                toggleAnswersBtn.classList.toggle('answers-hidden', answersHidden);
+                toggleAnswerBtns.forEach(btn => {
+                    btn.textContent = answersHidden ? 'Show' : 'Hide';
+                });
+
+                toggleAllAnswersBtn.textContent = answersHidden ? 'Show Answers' : 'Hide Answers';
+                toggleAllAnswersBtn.classList.toggle('hidden-state', answersHidden);
+            }
+
+            // Toggle all discussions visibility
+            function toggleAllDiscussions() {
+                discussionsHidden = !discussionsHidden;
+                localStorage.setItem(DISCUSSIONS_STORAGE_KEY, discussionsHidden);
+
+                discussionContents.forEach(content => {
+                    content.classList.toggle('hidden', discussionsHidden);
+                });
+
+                toggleDiscussionBtns.forEach(btn => {
+                    btn.textContent = discussionsHidden ? 'Show' : 'Hide';
+                });
+
+                toggleAllDiscussionsBtn.textContent = discussionsHidden ? 'Show Discussions' : 'Hide Discussions';
+                toggleAllDiscussionsBtn.classList.toggle('hidden-state', discussionsHidden);
+            }
+
+            // Toggle single answer visibility
+            function toggleSingleAnswer(btn) {
+                const answerSection = btn.closest('.answer-section');
+                const content = answerSection.querySelector('.answer-content');
+                const isHidden = content.classList.toggle('hidden');
+                btn.textContent = isHidden ? 'Show' : 'Hide';
+            }
+
+            // Toggle single discussion visibility
+            function toggleSingleDiscussion(btn) {
+                const discussionSection = btn.closest('.discussion-section');
+                const content = discussionSection.querySelector('.discussion-content');
+                const isHidden = content.classList.toggle('hidden');
+                btn.textContent = isHidden ? 'Show' : 'Hide';
             }
 
             // Toggle mobile sidebar
@@ -744,17 +861,27 @@
             }
 
             // Event Listeners
-            toggleAnswersBtn.addEventListener('click', toggleAnswers);
+            toggleAllAnswersBtn.addEventListener('click', toggleAllAnswers);
+            toggleAllDiscussionsBtn.addEventListener('click', toggleAllDiscussions);
             sidebarToggle.addEventListener('click', toggleSidebar);
             sidebarOverlay.addEventListener('click', closeSidebar);
             window.addEventListener('scroll', throttle(updateActiveTocItem, 100));
+
+            // Individual toggle buttons
+            toggleAnswerBtns.forEach(btn => {
+                btn.addEventListener('click', () => toggleSingleAnswer(btn));
+            });
+
+            toggleDiscussionBtns.forEach(btn => {
+                btn.addEventListener('click', () => toggleSingleDiscussion(btn));
+            });
 
             tocItems.forEach(item => {
                 item.querySelector('a').addEventListener('click', handleTocLinkClick);
             });
 
             // Initialize
-            initAnswerVisibility();
+            initVisibility();
             updateActiveTocItem();
         })();
     </script>
