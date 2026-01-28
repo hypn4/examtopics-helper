@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -66,3 +67,8 @@ class Exam(BaseModel):
     def to_json(self, indent: int = 2) -> str:
         """Export exam to JSON string."""
         return self.model_dump_json(indent=indent)
+
+    @classmethod
+    def from_json_file(cls, path: Path) -> "Exam":
+        """Load exam from JSON file."""
+        return cls.model_validate_json(path.read_text(encoding="utf-8"))

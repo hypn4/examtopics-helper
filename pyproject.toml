@@ -16,6 +16,9 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = ["weasyprint>=68.0"]
+watch = [
+    "watchfiles>=1.1.1",
+]
 
 [project.scripts]
 examtopics = "examtopics.cli:cli"
