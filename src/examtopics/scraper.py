@@ -549,9 +549,16 @@ class ExamTopicsScraper:
                 )
                 return None
 
-            # POST with all questions
+            # POST with total questions and range filter
+            # Server requires range parameters for large question counts
             response = await self._post_custom_view(
-                client, provider, exam_code, csrf_token, total_questions
+                client,
+                provider,
+                exam_code,
+                csrf_token,
+                total_questions,
+                range_from=1,
+                range_to=total_questions,
             )
 
             if response.status_code != 200:
