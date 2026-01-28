@@ -385,18 +385,45 @@
 
         /* Individual toggle button styles */
         .toggle-btn {
-            padding: 0.25rem 0.5rem;
+            padding: 0.25rem 0.75rem;
             font-size: 0.75rem;
-            border: none;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             cursor: pointer;
-            background: var(--border-color);
-            color: var(--text-color);
-            transition: background-color 0.2s;
+            background: transparent;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
         }
 
         .toggle-btn:hover {
-            background: #cbd5e1;
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        /* 숨김 상태 (Show 버튼) - 강조 */
+        .toggle-btn.is-hidden {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .toggle-btn.is-hidden:hover {
+            background: #1d4ed8;
+            border-color: #1d4ed8;
+        }
+
+        /* Chevron 아이콘 */
+        .toggle-btn::before {
+            content: '▼';
+            font-size: 0.6rem;
+            transition: transform 0.2s;
+        }
+
+        .toggle-btn.is-hidden::before {
+            content: '▶';
         }
 
         /* Discussion content hidden state */
@@ -729,7 +756,10 @@
                 // Initialize answers
                 if (answersHidden) {
                     answerContents.forEach(content => content.classList.add('hidden'));
-                    toggleAnswerBtns.forEach(btn => btn.textContent = 'Show');
+                    toggleAnswerBtns.forEach(btn => {
+                        btn.textContent = 'Show';
+                        btn.classList.add('is-hidden');
+                    });
                     toggleAllAnswersBtn.textContent = 'Show Answers';
                     toggleAllAnswersBtn.classList.add('hidden-state');
                 }
@@ -737,7 +767,10 @@
                 // Initialize discussions
                 if (discussionsHidden) {
                     discussionContents.forEach(content => content.classList.add('hidden'));
-                    toggleDiscussionBtns.forEach(btn => btn.textContent = 'Show');
+                    toggleDiscussionBtns.forEach(btn => {
+                        btn.textContent = 'Show';
+                        btn.classList.add('is-hidden');
+                    });
                     toggleAllDiscussionsBtn.textContent = 'Show Discussions';
                     toggleAllDiscussionsBtn.classList.add('hidden-state');
                 }
@@ -754,6 +787,7 @@
 
                 toggleAnswerBtns.forEach(btn => {
                     btn.textContent = answersHidden ? 'Show' : 'Hide';
+                    btn.classList.toggle('is-hidden', answersHidden);
                 });
 
                 toggleAllAnswersBtn.textContent = answersHidden ? 'Show Answers' : 'Hide Answers';
@@ -771,6 +805,7 @@
 
                 toggleDiscussionBtns.forEach(btn => {
                     btn.textContent = discussionsHidden ? 'Show' : 'Hide';
+                    btn.classList.toggle('is-hidden', discussionsHidden);
                 });
 
                 toggleAllDiscussionsBtn.textContent = discussionsHidden ? 'Show Discussions' : 'Hide Discussions';
@@ -783,6 +818,7 @@
                 const content = answerSection.querySelector('.answer-content');
                 const isHidden = content.classList.toggle('hidden');
                 btn.textContent = isHidden ? 'Show' : 'Hide';
+                btn.classList.toggle('is-hidden', isHidden);
             }
 
             // Toggle single discussion visibility
@@ -791,6 +827,7 @@
                 const content = discussionSection.querySelector('.discussion-content');
                 const isHidden = content.classList.toggle('hidden');
                 btn.textContent = isHidden ? 'Show' : 'Hide';
+                btn.classList.toggle('is-hidden', isHidden);
             }
 
             // Toggle mobile sidebar
