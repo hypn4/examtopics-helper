@@ -78,6 +78,14 @@ source ~/.zshrc
 
 This is needed because Homebrew on Apple Silicon installs libraries to `/opt/homebrew/lib` instead of `/usr/local/lib`.
 
+### (Optional) Watch Mode
+
+For template development with auto-reload:
+
+```bash
+uv sync --extra watch
+```
+
 ## Usage
 
 ### Get Session Cookie
@@ -207,6 +215,25 @@ examtopics info \
   --cookie "..."
 ```
 
+### Re-render from JSON
+
+If you've already extracted an exam and only want to re-render with updated templates:
+
+```bash
+# Re-render existing JSON to HTML
+examtopics render \
+  --input output/amazon_dop-c02.json \
+  --format html
+
+# Watch mode: auto re-render on template changes (for development)
+examtopics render \
+  --input output/amazon_dop-c02.json \
+  --format html \
+  --watch
+```
+
+> **Note:** Watch mode requires the `watch` extra: `uv sync --extra watch`
+
 ## Output Formats
 
 | Format | Description |
@@ -248,8 +275,9 @@ examtopics-helper/
 - **pydantic** - Data validation
 - **typer** - CLI framework
 - **rich** - Terminal output
-- **weasyprint** - HTML to PDF
+- **weasyprint** - HTML to PDF (optional)
 - **jinja2** - Templating
+- **watchfiles** - File change monitoring (optional)
 
 ## License
 
