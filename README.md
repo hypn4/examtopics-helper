@@ -2,6 +2,8 @@
 
 Extract and export ExamTopics exam questions to HTML, PDF, and Markdown formats.
 
+> ⚠️ **Important:** This tool only works with exams you have purchased on ExamTopics. Free exams have limited question access.
+
 ## Quick Start (Pre-built Binary)
 
 Download a pre-built binary from [GitHub Releases](https://github.com/hypn4/examtopics-helper/releases) — no Python installation required.
@@ -107,27 +109,36 @@ You only need these three cookies. Analytics cookies (`_ga`, `_gid`, `_fbp`, etc
 
 ### Using Environment Variables
 
-You can store your session cookie in a `.env` file to avoid passing it on every command:
+You can store your session cookies in a `.env` file to avoid passing them on every command:
 
 ```bash
-# Copy .env.example and fill in your cookies
 cp .env.example .env
 ```
 
-Example `.env` file:
+**Option 1: Individual variables (Recommended)**
+
+```
+EXAMTOPICS_SESSIONID="abc123xyz"
+EXAMTOPICS_CF_CLEARANCE="xxxx-xxxxx-xxxxx"
+EXAMTOPICS_CSRFTOKEN="yyyy"
+```
+
+**Option 2: Single string (Legacy)**
 
 ```
 EXAMTOPICS_COOKIE="sessionid=abc123xyz; cf_clearance=xxxx-xxxxx-xxxxx; csrftoken=yyyy"
 ```
 
-The CLI automatically loads `.env` from the current directory. You can still override with `--cookie`:
+**Priority:** CLI `--cookie` > Individual env vars > `EXAMTOPICS_COOKIE`
+
+The CLI automatically loads `.env` from the current directory:
 
 ```bash
-# Uses EXAMTOPICS_COOKIE from .env
+# Uses env vars from .env
 examtopics extract --exam "amazon/dop-c02"
 
 # Override with CLI option
-examtopics extract --exam "amazon/dop-c02" --cookie "session=different"
+examtopics extract --exam "amazon/dop-c02" --cookie "sessionid=different"
 ```
 
 ### Extract Exam Questions
